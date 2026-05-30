@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>推箱子 - Sokoban</title>
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --panel-bg: #16213e;
+            --gold: #f0c040;
+            --text: #e0e0e0;
+            --accent: #4ecdc4;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .game-wrapper {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 900px;
+        }
+
+        .side-panel {
+            background: var(--panel-bg);
+            border: 2px solid #2a3a5e;
+            border-radius: 12px;
+            padding: 24px 20px;
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-width: 180px;
+            max-width: 220px;
+        }
+
+        .side-panel h2 {
+            font-size: 1.3em;
+            color: var(--gold);
+            text-align: center;
+            letter-spacing: 2px;
+            border-bottom: 2px solid #2a3a5e;
+            padding-bottom: 12px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.05em;
+        }
+
+        .stat-label {
+            color: #a0a0b0;
+        }
+
+        .stat-value {
+            color: #fff;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .stat-value.moves {
+            color: var(--accent);
+        }
+
+        .stat-value.best {
+            color: #5cb85c;
+        }
+
+        .level-select {
+            background: #0f0f23;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 240px;
+            overflow-y: auto;
+        }
+
+        .level-select .section-title {
+            font-size: 0.85em;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        .level-btn {
+            background: #1a2a4e;
+            color: #ccc;
+            border: 1px solid #2a3a5e;
+            padding: 7px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            text-align: left;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+
+        .level-btn:hover {
+            background: #2a4a7e;
+            color: #fff;
+        }
+        .level-btn.active {
+            background: #3a5a9e;
+            color: #fff;
+            border-color: var(--accent);
+            font-weight: bold;
+        }
+        .level-btn .star {
+            color: var(--gold);
+            float: right;
+        }
+
+        .controls-info {
+            background: #0f0f23;
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 0.8em;
+            color: #888;
+            line-height: 2;
+        }
+        .controls-info kbd {
+            background: #2a3a5e;
+            color: #fff;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.9em;
+            border: 1px solid #4a5a7e;
+            white-space: nowrap;
+        }
+
+        .game-container {
+            position: relative;
+            border: 3px solid #4a5a7e;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(78, 205, 196, 0.1), 0 0 60px rgba(0, 0, 0, 0.5);
+            background: #0a0a14;
+            line-height: 0;
+        }
+
+        canvas {
+            display: block;
+            border-radius: 5px;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .overlay-message {
+            background: rgba(0, 0, 0, 0.85);
+            color: #f0c040;
+            font-size: 1.6em;
+            font-weight: bold;
+            padding: 16px 32px;
+            border-radius: 12px;
+            letter-spacing: 2px;
+            text-align: center;
+            border: 2px solid #f0c040;
+            animation: pulse-text 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse-text {
+            0%,
+            100% {
+                text-shadow: 0 0 10px #f0c040;
+            }
+            50% {
+                text-shadow: 0 0 30px #f0c040, 0 0 50px #ff6b6b;
+            }
+        }
+        .hidden {
+            display: none !important;
+        }
+
+        .completion-stats {
+            text-align: center;
+            font-size: 0.6em;
+            color: #ccc;
+            margin-top: 8px;
+            letter-spacing: 0;
+            font-weight: normal;
+        }
+
+        @media (max-width: 800px) {
+            .game-wrapper {
+                flex-direction: column;
+                align-items: center;
+            }
+            .side-panel {
+                flex-direction: row;
+                flex-wrap: wrap;
+                min-width: auto;
+                max-width: none;
+                gap: 10px;
+                padding: 12px 16px;
+                justify-content: center;
+            }
+            .side-panel h2 {
+                font-size: 1em;
+                border-bottom: none;
+                padding-bottom: 0;
+                margin-right: 6px;
+            }
+            .stat-item {
+                font-size: 0.85em;
+                gap: 6px;
+            }
+            .level-select {
+                flex-direction: row;
+                flex-wrap: wrap;
+                max-height: none;
+                gap: 4px;
+            }
+            .level-btn {
+                font-size: 0.75em;
+                padding: 5px 8px;
+            }
+            .controls-info {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-wrapper">
+        <!-- Side Panel -->
+        <div class="side-panel">
+            <h2>📦 推 箱 子</h2>
+            <div class="stat-item">
+                <span class="stat-label">👣 步数</span>
+                <span class="stat-value moves" id="moveDisplay">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">🏆 最佳</span>
+                <span class="stat-value best" id="bestDisplay">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">📋 关卡</span>
+                <span class="stat-value" id="levelDisplay">1 / 10</span>
+            </div>
+            <div class="level-select" id="levelSelect">
+                <div class="section-title">选择关卡</div>
+            </div>
+            <div class="controls-info">
+                <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 移动<br>
+                <kbd>Z</kbd> 或 <kbd>Ctrl+Z</kbd> 撤销<br>
+                <kbd>R</kbd> 重置关卡<br>
+                <kbd>&lt;</kbd><kbd>&gt;</kbd> 切换关卡
+            </div>
+        </div>
+
+        <!-- Game Canvas -->
+        <div class="game-container" id="gameContainer">
+            <canvas id="gameCanvas"></canvas>
+            <div class="overlay hidden" id="overlay">
+                <div class="overlay-message" id="overlayMessage"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ==================== DOM ====================
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const overlay = document.getElementById('overlay');
+            const overlayMessage = document.getElementById('overlayMessage');
+            const moveDisplay = document.getElementById('moveDisplay');
+            const bestDisplay = document.getElementById('bestDisplay');
+            const levelDisplay = document.getElementById('levelDisplay');
+            const levelSelect = document.getElementById('levelSelect');
+
+            // ==================== Constants ====================
+            const TILE = { FLOOR: 0, WALL: 1, TARGET: 2, BOX: 3, PLAYER: 4, BOX_ON_TARGET: 5, PLAYER_ON_TARGET: 6 };
+
+            // ==================== Level Data ====================
+            const levelData = [
+                { // Level 1 - Tutorial
+                    name: '初入仓库',
+                    width: 8,
+                    height: 8,
+                    data: [
+                        '  ####  ',
+                        '  # .#  ',
+                        '  #  #  ',
+                        '### $## ',
+                        '# . $ # ',
+                        '###$ ## ',
+                        '  #@ # ',
+                        '  #### ',
+                    ]
+                }, { // Level 2
+                    name: '小试牛刀',
+                    width: 8,
+                    height: 8,
+                    data: [
+                        '  ####  ',
+                        '###  ## ',
+                        '#   $ # ',
+                        '# #. ###',
+                        '# .$ # ',
+                        '## $  # ',
+                        ' # @ ## ',
+                        ' ####  ',
+                    ]
+                }, { // Level 3
+                    name: '步步为营',
+                    width: 9,
+                    height: 9,
+                    data: [
+                        '  #####  ',
+                        '  #   #  ',
+                        '  # $ #  ',
+                        ' ### $## ',
+                        ' #  $.# ',
+                        ' # #.  # ',
+                        ' #   ### ',
+                        ' ##@##   ',
+                        '  ###    ',
+                    ]
+                }, { // Level 4
+                    name: '左右为难',
+                    width: 9,
+                    height: 9,
+                    data: [
+                        '  #####  ',
+                        ' ###  ## ',
+                        '##  $  # ',
+                        '# .#$@##',
+                        '##. $ # ',
+                        ' #  $ # ',
+                        ' #  ####',
+                        ' ####   ',
+                        '        ',
+                    ]
+                }, { // Level 5
+                    name: '迷宫仓库',
+                    width: 11,
+                    height: 9,
+                    data: [
+                        '  ######  ',
+                        ' ## #. #  ',
+                        '##  $  ## ',
+                        '# .# #. # ',
+                        '#  $    # ',
+                        '# .# ## # ',
+                        '##  @ ### ',
+                        ' ######   ',
+                        '          ',
+                    ]
+                }, { // Level 6
+                    name: '曲折前行',
+                    width: 10,
+                    height: 9,
+                    data: [
+                        '  ###### ',
+                        '  #    # ',
+                        '### $# ##',
+                        '#  . $. #',
+                        '# .#$ # #',
+                        '# .  $@ #',
+                        '## ######',
+                        ' ###    ',
+                        '        ',
+                    ]
+                }, { // Level 7
+                    name: '棋局',
+                    width: 10,
+                    height: 10,
+                    data: [
+                        ' ####### ',
+                        '##  #  # ',
+                        '#  $$  # ',
+                        '# .$. ###',
+                        '# $.$ # ',
+                        '# .$. # ',
+                        '#  # @# ',
+                        '######## ',
+                        '         ',
+                        '         ',
+                    ]
+                }, { // Level 8
+                    name: '九宫阵',
+                    width: 9,
+                    height: 9,
+                    data: [
+                        '  #####  ',
+                        ' ##   ## ',
+                        ' # $#$ # ',
+                        ' # .#. # ',
+                        ' # . . # ',
+                        ' # #$# # ',
+                        '##  @ ## ',
+                        '#     #  ',
+                        '######   ',
+                    ]
+                }, { // Level 9
+                    name: '终极考验',
+                    width: 12,
+                    height: 10,
+                    data: [
+                        '  ######## ',
+                        '  #  #   # ',
+                        '### $$ # ##',
+                        '#  .#. ## #',
+                        '# #. .$  @#',
+                        '#  .$. ## #',
+                        '### .# #  #',
+                        ' ##  $ # # ',
+                        '  #    #   ',
+                        '  ######   ',
+                    ]
+                }, { // Level 10
+                    name: '大师挑战',
+                    width: 11,
+                    height: 11,
+                    data: [
+                        '  #######  ',
+                        '  #  #  #  ',
+                        '### $  $## ',
+                        '#  ..#.. # ',
+                        '# $  #  $# ',
+                        '# .#   #. #',
+                        '#  # $ #  #',
+                        '## .# #. ##',
+                        ' #  #$#  # ',
+                        ' #  @ #  # ',
+                        ' ########  ',
+                    ]
+                },
+            ];
+
+            // ==================== Game State ====================
+            const CELL = 48; // pixel size per cell
+            let currentLevel = 0;
+            let grid = [];
+            let gridW = 0;
+            let gridH = 0;
+            let playerX = 0;
+            let playerY = 0;
+            let moves = 0;
+            let history = [];
+            let bestScores = {};
+            let gameWon = false;
+
+            // ==================== Level Management ====================
+            function loadLevel(index) {
+                if (index < 0 || index >= levelData.length) return;
+                currentLevel = index;
+                const lv = levelData[index];
+                gridW = lv.width;
+                gridH = lv.height;
+                grid = [];
+                playerX = 0;
+                playerY = 0;
+                moves = 0;
+                history = [];
+                gameWon = false;
+
+                for (let y = 0; y < gridH; y++) {
+                    grid[y] = [];
+                    const row = y < lv.data.length ? lv.data[y] : '';
+                    for (let x = 0; x < gridW; x++) {
+                        const ch = x < row.length ? row[x] : ' ';
+                        switch (ch) {
+                            case '#':
+                                grid[y][x] = TILE.WALL;
+                                break;
+                            case ' ':
+                                grid[y][x] = TILE.FLOOR;
+                                break;
+                            case '.':
+                                grid[y][x] = TILE.TARGET;
+                                break;
+                            case '$':
+                                grid[y][x] = TILE.BOX;
+                                break;
+                            case '*':
+                                grid[y][x] = TILE.BOX_ON_TARGET;
+                                break;
+                            case '@':
+                                grid[y][x] = TILE.FLOOR;
+                                playerX = x;
+                                playerY = y;
+                                break;
+                            case '+':
+                                grid[y][x] = TILE.TARGET;
+                                playerX = x;
+                                playerY = y;
+                                break;
+                            default:
+                                grid[y][x] = TILE.FLOOR;
+                        }
+                    }
+                }
+
+                // Size canvas
+                canvas.width = gridW * CELL;
+                canvas.height = gridH * CELL;
+
+                updateHUD();
+                updateLevelButtons();
+                hideOverlay();
+                render();
+                loadBestScore();
+            }
+
+            function resetLevel() {
+                loadLevel(currentLevel);
+            }
+
+            function nextLevel() {
+                if (currentLevel < levelData.length - 1) {
+                    loadLevel(currentLevel + 1);
+                }
+            }
+
+            function prevLevel() {
+                if (currentLevel > 0) {
+                    loadLevel(currentLevel - 1);
+                }
+            }
+
+            // ==================== Best Scores (localStorage) ====================
+            function getBestKey() { return 'sokoban_best_' + currentLevel; }
+
+            function loadBestScore() {
+                const key = getBestKey();
+                const saved = localStorage.getItem(key);
+                if (saved !== null) {
+                    bestScores[currentLevel] = parseInt(saved);
+                    bestDisplay.textContent = saved;
+                } else {
+                    bestScores[currentLevel] = null;
+                    bestDisplay.textContent = '-';
+                }
+            }
+
+            function saveBestScore() {
+                const key = getBestKey();
+                const prev = bestScores[currentLevel];
+                if (prev === null || moves < prev) {
+                    bestScores[currentLevel] = moves;
+                    localStorage.setItem(key, moves);
+                    bestDisplay.textContent = moves;
+                }
+            }
+
+            // ==================== Game Logic ====================
+            function isWall(x, y) {
+                if (x < 0 || x >= gridW || y < 0 || y >= gridH) return true;
+                return grid[y][x] === TILE.WALL;
+            }
+
+            function isBox(x, y) {
+                if (x < 0 || x >= gridW || y < 0 || y >= gridH) return false;
+                return grid[y][x] === TILE.BOX || grid[y][x] === TILE.BOX_ON_TARGET;
+            }
+
+            function isTarget(x, y) {
+                if (x < 0 || x >= gridW || y < 0 || y >= gridH) return false;
+                return grid[y][x] === TILE.TARGET || grid[y][x] === TILE.BOX_ON_TARGET || grid[y][x] === TILE
+                    .PLAYER_ON_TARGET;
+            }
+
+            function tileAt(x, y) { return grid[y][x]; }
+
+            function setTile(x, y, t) { grid[y][x] = t; }
+
+            function checkWin() {
+                for (let y = 0; y < gridH; y++) {
+                    for (let x = 0; x < gridW; x++) {
+                        if (grid[y][x] === TILE.TARGET) return false;
+                    }
+                }
+                return true;
+            }
+
+            function movePlayer(dx, dy) {
+                if (gameWon) return;
+
+                const nx = playerX + dx;
+                const ny = playerY + dy;
+
+                // Can't move into wall
+                if (isWall(nx, ny)) return;
+
+                // Save state for undo
+                const snapshot = {
+                    grid: grid.map(r => [...r]),
+                    px: playerX,
+                    py: playerY,
+                    moves: moves,
+                };
+
+                if (isBox(nx, ny)) {
+                    // Try to push the box
+                    const bx = nx + dx;
+                    const by = ny + dy;
+                    if (isWall(bx, by) || isBox(bx, by)) return;
+
+                    // Move box
+                    const boxTile = tileAt(nx, ny);
+                    const destTile = tileAt(bx, by);
+                    setTile(bx, by, destTile === TILE.TARGET ? TILE.BOX_ON_TARGET : TILE.BOX);
+                    setTile(nx, ny, boxTile === TILE.BOX_ON_TARGET ? TILE.TARGET : TILE.FLOOR);
+                }
+
+                // Move player
+                const destTile = tileAt(nx, ny);
+                playerX = nx;
+                playerY = ny;
+                moves++;
+
+                history.push(snapshot);
+                if (history.length > 200) history.shift(); // limit history
+
+                updateHUD();
+                render();
+
+                // Check win
+                if (checkWin()) {
+                    gameWon = true;
+                    saveBestScore();
+                    updateHUD();
+                    showOverlay('🎉 恭喜通关！ 🎉');
+                }
+            }
+
+            function undo() {
+                if (gameWon) {
+                    gameWon = false;
+                    hideOverlay();
+                }
+                if (history.length === 0) return;
+                const snap = history.pop();
+                grid = snap.grid;
+                playerX = snap.px;
+                playerY = snap.py;
+                moves = snap.moves;
+                updateHUD();
+                render();
+            }
+
+            // ==================== HUD ====================
+            function updateHUD() {
+                moveDisplay.textContent = moves;
+                levelDisplay.textContent = `${currentLevel + 1} / ${levelData.length}`;
+            }
+
+            function showOverlay(msg) {
+                const lv = levelData[currentLevel];
+                overlayMessage.innerHTML = `${msg}<div class="completion-stats">${lv.name} — ${moves} 步 ${bestScores[
+                    currentLevel] ? '(最佳: ' + bestScores[currentLevel] + ')' : ''}</div>`;
+                overlay.classList.remove('hidden');
+            }
+
+            function hideOverlay() {
+                overlay.classList.add('hidden');
+            }
+
+            // ==================== Level Select Buttons ====================
+            function updateLevelButtons() {
+                let html = '<div class="section-title">选择关卡</div>';
+                for (let i = 0; i < levelData.length; i++) {
+                    const lv = levelData[i];
+                    const best = bestScores[i] || (localStorage.getItem('sokoban_best_' + i));
+                    const star = best ? ' ⭐' : '';
+                    const active = i === currentLevel ? ' active' : '';
+                    html +=
+                        `<button class="level-btn${active}" onclick="window._sokoban_goto(${i})">${i + 1}. ${lv.name}${star}</button>`;
+                }
+                levelSelect.innerHTML = html;
+            }
+            window._sokoban_goto = function(i) { loadLevel(i); };
+
+            function buildLevelButtons() {
+                updateLevelButtons();
+                // Load saved best scores for display
+                for (let i = 0; i < levelData.length; i++) {
+                    const saved = localStorage.getItem('sokoban_best_' + i);
+                    if (saved) bestScores[i] = parseInt(saved);
+                }
+            }
+
+            // ==================== Rendering ====================
+            function render() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Floor background
+                ctx.fillStyle = '#1a1a14';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                for (let y = 0; y < gridH; y++) {
+                    for (let x = 0; x < gridW; x++) {
+                        const px = x * CELL;
+                        const py = y * CELL;
+                        const tile = grid[y][x];
+                        const isPlayerHere = (x === playerX && y === playerY);
+
+                        // Floor base
+                        ctx.fillStyle = '#2a2a20';
+                        ctx.fillRect(px + 2, py + 2, CELL - 4, CELL - 4);
+
+                        // Subtle grid lines
+                        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+                        ctx.lineWidth = 0.5;
+                        ctx.strokeRect(px + 2, py + 2, CELL - 4, CELL - 4);
+
+                        switch (tile) {
+                            case TILE.WALL:
+                                drawWall(px, py);
+                                break;
+                            case TILE.TARGET:
+                                drawTarget(px, py);
+                                break;
+                            case TILE.BOX:
+                                drawBox(px, py);
+                                break;
+                            case TILE.BOX_ON_TARGET:
+                                drawTarget(px, py);
+                                drawBox(px, py);
+                                break;
+                            case TILE.FLOOR:
+                                // Already drawn
+                                break;
+                        }
+
+                        // Player on top
+                        if (isPlayerHere) {
+                            drawPlayer(px, py);
+                        }
+                    }
+                }
+            }
+
+            function drawWall(x, y) {
+                const m = 2;
+                // Wall shadow
+                ctx.fillStyle = '#5a4a3a';
+                ctx.fillRect(x + m, y + m, CELL - m * 2, CELL - m * 2);
+
+                // Wall main
+                const grad = ctx.createLinearGradient(x, y, x + CELL, y + CELL);
+                grad.addColorStop(0, '#9b8c7c');
+                grad.addColorStop(0.4, '#8b7b6b');
+                grad.addColorStop(1, '#6b5b4b');
+                ctx.fillStyle = grad;
+                ctx.fillRect(x + m + 2, y + m + 2, CELL - (m + 2) * 2, CELL - (m + 2) * 2);
+
+                // Brick lines
+                ctx.strokeStyle = '#5a4a3a';
+                ctx.lineWidth = 1;
+                const hh = (CELL - (m + 2) * 2) / 2;
+                ctx.beginPath();
+                ctx.moveTo(x + m + 2, y + m + 2 + hh);
+                ctx.lineTo(x + CELL - m - 2, y + m + 2 + hh);
+                ctx.moveTo(x + m + 2 + CELL / 3, y + m + 2);
+                ctx.lineTo(x + m + 2 + CELL / 3, y + m + 2 + hh);
+                ctx.moveTo(x + m + 2 + 2 * CELL / 3, y + m + 2 + hh);
+                ctx.lineTo(x + m + 2 + 2 * CELL / 3, y + CELL - m - 2);
+                ctx.stroke();
+
+                // Top highlight
+                ctx.fillStyle = 'rgba(255,255,255,0.08)';
+                ctx.fillRect(x + m + 2, y + m + 2, CELL - (m + 2) * 2, 3);
+            }
+
+            function drawTarget(x, y) {
+                const cx = x + CELL / 2;
+                const cy = y + CELL / 2;
+                const r = CELL * 0.2;
+
+                // Outer ring
+                ctx.fillStyle = 'rgba(255,80,80,0.25)';
+                ctx.beginPath();
+                ctx.arc(cx, cy, r + 6, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Inner dot
+                ctx.fillStyle = '#e74c3c';
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Shine
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.beginPath();
+                ctx.arc(cx - 2, cy - 3, r * 0.35, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Diamond sparkle
+                ctx.fillStyle = 'rgba(255,200,200,0.5)';
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(Math.PI / 4);
+                ctx.fillRect(-4, -4, 8, 8);
+                ctx.restore();
+            }
+
+            function drawBox(x, y) {
+                const m = 4;
+                const isOnTarget = grid[Math.floor(y / CELL)][Math.floor(x / CELL)] === TILE.BOX_ON_TARGET;
+
+                // Shadow
+                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                ctx.fillRect(x + m + 2, y + m + 2, CELL - m * 2, CELL - m * 2);
+
+                // Box body
+                const grad = ctx.createLinearGradient(x, y, x + CELL, y + CELL);
+                grad.addColorStop(0, '#f9a825');
+                grad.addColorStop(0.5, '#f57f17');
+                grad.addColorStop(1, '#e65100');
+                ctx.fillStyle = grad;
+                ctx.fillRect(x + m, y + m, CELL - m * 2, CELL - m * 2);
+
+                // Border
+                ctx.strokeStyle = '#bf360c';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x + m, y + m, CELL - m * 2, CELL - m * 2);
+
+                // Cross straps
+                ctx.strokeStyle = '#bf360c';
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.moveTo(x + m + 2, y + CELL / 2);
+                ctx.lineTo(x + CELL - m - 2, y + CELL / 2);
+                ctx.moveTo(x + CELL / 2, y + m + 2);
+                ctx.lineTo(x + CELL / 2, y + CELL - m - 2);
+                ctx.stroke();
+
+                // On-target glow
+                if (isOnTarget) {
+                    ctx.fillStyle = 'rgba(255,255,100,0.2)';
+                    ctx.fillRect(x + m, y + m, CELL - m * 2, CELL - m * 2);
+                }
+
+                // Highlight
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.fillRect(x + m + 2, y + m + 2, CELL - m * 2 - 4, CELL / 2 - m);
+            }
+
+            function drawPlayer(x, y) {
+                const m = 6;
+                const cx = x + CELL / 2;
+                const cy = y + CELL / 2;
+
+                // Shadow circle
+                ctx.fillStyle = 'rgba(0,0,0,0.25)';
+                ctx.beginPath();
+                ctx.ellipse(cx, cy + CELL * 0.35, CELL * 0.35, CELL * 0.1, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Body
+                const bodyGrad = ctx.createRadialGradient(cx - 2, cy - 3, 2, cx, cy, CELL * 0.4);
+                bodyGrad.addColorStop(0, '#6ec6ff');
+                bodyGrad.addColorStop(0.7, '#2196f3');
+                bodyGrad.addColorStop(1, '#0d47a1');
+                ctx.fillStyle = bodyGrad;
+                ctx.beginPath();
+                ctx.arc(cx, cy - 2, CELL * 0.35, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#0d47a1';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Eyes
+                const eyeY = cy - 6;
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(cx - 6, eyeY, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(cx + 6, eyeY, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#111';
+                ctx.beginPath();
+                ctx.arc(cx - 5, eyeY + 1, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(cx + 7, eyeY + 1, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Smile
+                ctx.strokeStyle = '#111';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(cx, cy - 2, 10, 0.15 * Math.PI, 0.85 * Math.PI);
+                ctx.stroke();
+
+                // Hard hat
+                ctx.fillStyle = '#ffcc00';
+                ctx.beginPath();
+                ctx.ellipse(cx, cy - 12, 15, 8, 0, Math.PI, 0);
+                ctx.fill();
+                ctx.fillRect(cx - 15, cy - 15, 30, 5);
+                ctx.strokeStyle = '#e6b800';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.ellipse(cx, cy - 12, 15, 8, 0, Math.PI, 0);
+                ctx.stroke();
+                ctx.strokeRect(cx - 15, cy - 15, 30, 5);
+            }
+
+            // ==================== Input ====================
+            window.addEventListener('keydown', e => {
+                if (e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault();
+                    movePlayer(0, -1); } else if (e.code === 'ArrowDown' || e.code === 'KeyS') { e.preventDefault();
+                    movePlayer(0, 1); } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') { e.preventDefault();
+                    movePlayer(-1, 0); } else if (e.code === 'ArrowRight' || e.code === 'KeyD') { e.preventDefault();
+                    movePlayer(1, 0); } else if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey)) { e.preventDefault();
+                    undo(); } else if (e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey) { e.preventDefault();
+                    undo(); } else if (e.code === 'KeyR') { e.preventDefault();
+                    resetLevel(); } else if (e.code === 'BracketRight' || e.code === 'Period') { e.preventDefault();
+                    nextLevel(); } else if (e.code === 'BracketLeft' || e.code === 'Comma') { e.preventDefault();
+                    prevLevel(); }
+            });
+
+            // Touch swipe support
+            let touchStartX = 0;
+            let touchStartY = 0;
+            canvas.addEventListener('touchstart', e => {
+                if (e.touches.length === 1) {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                }
+                e.preventDefault();
+            }, { passive: false });
+            canvas.addEventListener('touchend', e => {
+                const dx = (e.changedTouches[0]?.clientX || touchStartX) - touchStartX;
+                const dy = (e.changedTouches[0]?.clientY || touchStartY) - touchStartY;
+                const threshold = 20;
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    if (Math.abs(dx) > threshold) movePlayer(dx > 0 ? 1 : -1, 0);
+                } else {
+                    if (Math.abs(dy) > threshold) movePlayer(0, dy > 0 ? 1 : -1);
+                }
+                e.preventDefault();
+            }, { passive: false });
+
+            // ==================== Init ====================
+            function init() {
+                buildLevelButtons();
+                loadLevel(0);
+                // Also load best scores from storage for display
+                for (let i = 0; i < levelData.length; i++) {
+                    const s = localStorage.getItem('sokoban_best_' + i);
+                    if (s) bestScores[i] = parseInt(s);
+                }
+                updateLevelButtons();
+                render();
+            }
+
+            init();
+            console.log('📦 推箱子 Sokoban 准备就绪！');
+            console.log('   ↑↓←→ 移动 | Z 撤销 | R 重置 | < > 切换关卡');
+            console.log('   共 ' + levelData.length + ' 个关卡等你挑战！');
+        })();
+    </script>
+</body>
+</html>
